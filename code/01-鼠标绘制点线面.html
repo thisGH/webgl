@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鼠标绘制点线面</title>
+</head>
+<body>
+    <canvas id="webglcanvas" width="500" height="500"></canvas>
+
+    <script src="./examples/lib/webgl-utils.js"></script>
+    <script src="./examples/lib/webgl-debug.js"></script>
+    <script src="./examples/lib/cuon-utils.js"></script>
+
+
+    <script id="vertexshader" type="text">
+        attribute vec4 a_Position;
+        attribute float a_PointSize;
+        void main(){
+            gl_Position = a_Position;
+            gl_PointSize = a_PointSize;
+        }
+
+    </script>
+     <script id="fragmentshader" type="text">
+        precision mediump float;
+        uniform vec4 u_FragColor;
+        void main(){
+            gl_FragColor = u_FragColor;
+        }
+
+     </script>
+     
+    <script>
+
+        const VSHADER_SOURCE = document.getElementById('vertexshader').innerHTML
+        const FSHADER_SOURCE = document.getElementById('fragmentshader').innerHTML
+
+        function main() {
+            // Retrieve <canvas> element
+            var canvas = document.getElementById('webglcanvas');
+
+            // Get the rendering context for WebGL
+            var gl = getWebGLContext(canvas);
+            if (!gl) {
+                console.log('Failed to get the rendering context for WebGL');
+                return;
+            }
+
+            // Initialize shaders
+            if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
+                console.log('Failed to intialize shaders.');
+                return;
+            }
+
+            const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+            if(a_Position < 0) {
+                console.log('Failed to get the storage location of a_Position')
+                return
+            }
+            // gl.vertexAttrib1f(a_Position, 0.3)
+
+            const a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize')
+            if(a_PointSize < 0) {
+                console.log('Failed to get the storage location of a_PointSize')
+                return
+            }
+
+            const u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor')
+            if(a_PointSize < 0) {
+                console.log('Failed to get the storage location of u_FragColor')
+                return
+            }
+
+            gl.vertexAttrib1f(a_PointSize, 5)
+
+            // var position = new Float32Array([1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0])
+            // gl.vertexAttrib4fv(a_Position, position)
+
+
+            // Specify the color for clearing <canvas>
+            gl.clearColor(0.9, 0.9, 0.9, 1.0);
+            // Clear <canvas>
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            // Draw a point
+            // gl.drawArrays(gl.POINTS, 0, 1);
+
+            canvas.onmousedown = function(ev) {
+                drawByMouse(ev, gl, canvas, a_Position, u_FragColor)
+            }
+
+            
+        }
+
+        const gl_Points = []
+
+        function drawByMouse (ev, gl, canvas, a_Position, u_FragColor) {
+
+            const cx = ev.clientX
+            const cy = ev.clientY
+
+            const rect = canvas.getBoundingClientRect()
+
+            const x = (cx - rect.left - canvas.width / 2) / ( canvas.width / 2)
+            const y = - (cy - rect.top - canvas.height / 2) / ( canvas.height / 2)
+
+            gl_Points.push(x, y)
+
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            for(let i = 0; i <= gl_Points.length / 2 - 1; i++) {
+
+                const glx = gl_Points[2*i]
+                const gly = gl_Points[2*i + 1]
+
+                gl.uniform4f(u_FragColor, (glx + 1) / 2, (gly + 1) / 2, 0.0, 1.0)
+
+                gl.vertexAttrib2f(a_Position, glx, gly)
+
+                gl.drawArrays(gl.POINTS, 0, 1)
+            }
+        }
+
+        main()
+
+
+    </script>
+</body>
+</html>

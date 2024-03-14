@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>02-绘制三角形</title>
+</head>
+<body>
+    <canvas id="webglcanvas" width="500" height="500"></canvas>
+
+    <script src="./examples/lib/webgl-utils.js"></script>
+    <script src="./examples/lib/webgl-debug.js"></script>
+    <script src="./examples/lib/cuon-utils.js"></script>
+
+
+    <script id="vertexshader" type="text">
+        attribute vec4 a_Position;
+        attribute float a_PointSize;
+        void main(){
+            gl_Position = a_Position;
+            gl_PointSize = a_PointSize;
+        }
+
+    </script>
+     <script id="fragmentshader" type="text">
+        precision mediump float;
+        uniform vec4 u_FragColor;
+        void main(){
+            gl_FragColor = u_FragColor;
+        }
+
+     </script>
+     
+    <script>
+
+        const VSHADER_SOURCE = document.getElementById('vertexshader').innerHTML
+        const FSHADER_SOURCE = document.getElementById('fragmentshader').innerHTML
+
+        function main() {
+            // Retrieve <canvas> element
+            var canvas = document.getElementById('webglcanvas');
+
+            // Get the rendering context for WebGL
+            var gl = getWebGLContext(canvas);
+            if (!gl) {
+                console.log('Failed to get the rendering context for WebGL');
+                return;
+            }
+
+            // Initialize shaders
+            if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
+                console.log('Failed to intialize shaders.');
+                return;
+            }
+
+            const a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize')
+            if(a_PointSize < 0) {
+                console.log('Failed to get the storage location of a_PointSize')
+                return
+            }
+
+            const u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor')
+            if(a_PointSize < 0) {
+                console.log('Failed to get the storage location of u_FragColor')
+                return
+            }
+
+            gl.vertexAttrib1f(a_PointSize, 5)
+
+            gl.clearColor(0.9, 0.9, 0.9, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            const n = initVertexBuffers(gl)
+
+            gl.drawArrays(gl.TRIANGLE_FAN, 0, n)
+        }
+
+        function initVertexBuffers(gl) {
+            const vertices = new Float32Array([
+                -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5
+            ])
+
+            const n = 4
+
+            const vertexBuffer = gl.createBuffer()
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
+            const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+            gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0)
+            gl.enableVertexAttribArray(a_Position)
+
+            return n
+        }
+
+        main()
+
+
+    </script>
+</body>
+</html>

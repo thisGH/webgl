@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>07-纹理</title>
+</head>
+<body>
+    <canvas id="webglcanvas" width="500" height="500"></canvas>
+
+    <script src="./examples/lib/webgl-utils.js"></script>
+    <script src="./examples/lib/webgl-debug.js"></script>
+    <script src="./examples/lib/cuon-utils.js"></script>
+    <script src="./examples/lib/cuon-matrix.js"></script>
+
+
+    <script id="vertexshader" type="x-shader/x-vertex">
+
+        attribute vec4 a_Position;
+        attribute float a_PointSize;
+        attribute vec2 a_TexCoord;
+
+        uniform mat4 u_Matrix;
+
+        varying vec2 v_TexCoord;
+
+        void main(){
+            gl_Position = u_Matrix * a_Position;
+
+            gl_PointSize = a_PointSize;
+
+            v_TexCoord = a_TexCoord;
+
+        }
+
+    </script>
+     <script id="fragmentshader" type="x-shader/x-fragment">
+        precision mediump float;
+
+        uniform sampler2D u_Sampler;
+
+        varying vec2 v_TexCoord;
+
+        void main(){
+            gl_FragColor = texture2D(u_Sampler, v_TexCoord);
+        }
+
+     </script>
+     
+    <script>
+
+        const VSHADER_SOURCE = document.getElementById('vertexshader').innerHTML
+        const FSHADER_SOURCE = document.getElementById('fragmentshader').innerHTML
+
+        function main() {
+            // Retrieve <canvas> element
+            var canvas = document.getElementById('webglcanvas');
+
+            // Get the rendering context for WebGL
+            var gl = getWebGLContext(canvas);
+            if (!gl) {
+                console.log('Failed to get the rendering context for WebGL');
+                return;
+            }
+
+            // Initialize shaders
+            if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
+                console.log('Failed to intialize shaders.');
+                return;
+            }
+
+            const a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize')
+            if(a_PointSize < 0) {
+                console.log('Failed to get the storage location of a_PointSize')
+                return
+            }
+
+            gl.vertexAttrib1f(a_PointSize, 5)
+
+            draw(gl)
+        }
+
+        function draw(gl) {
+
+            initTextures(gl)
+
+            const n = initVertexBuffers(gl)
+
+            gl.clearColor(0.9, 0.9, 0.9, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.drawArrays(gl.TRIANGLE_FAN, 0, n)
+
+            
+
+            const anglePerSec = 10
+
+                
+            const animateFn = animate(anglePerSec, gl)
+
+            const tick = () => {
+                animateFn()
+
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                gl.drawArrays(gl.TRIANGLE_FAN, 0, n)
+
+                requestAnimationFrame(tick)
+            }
+            tick()
+        }
+
+        function animate(anglePerSec, gl) {
+            let now = 0
+
+            const u_Matrix = new Matrix4()
+
+            const scale = 0.5
+
+            u_Matrix.translate(0.3, 0.0, 0.0)
+            u_Matrix.scale(scale, scale, scale)
+            
+            return () => {
+                const newNow = Date.now()
+                if(now === 0)  {
+                    now = newNow
+                } else {
+                    const angleDiff = ((newNow - now) / 1000) * anglePerSec
+                    now = newNow
+
+                    u_Matrix.rotate(angleDiff, 0.0, 0.0, 1.0)
+                    const u_MatrixLoc = gl.getUniformLocation(gl.program, 'u_Matrix')
+                    gl.uniformMatrix4fv(u_MatrixLoc, false, u_Matrix.elements)
+                }
+            }
+        }
+
+        function initVertexBuffers(gl) {
+            const verticesColors = new Float32Array([
+                -0.5, 0.5, 0.0, 1.0, 
+                -0.5, -0.5, 0.0, 0.0,
+                0.5, -0.5, 1.0, 0.0, 
+                0.5, 0.5, 1.0, 1.0
+            ])
+
+            const FSIZE = verticesColors.BYTES_PER_ELEMENT
+
+            const n = 4
+
+            const vertexBuffer = gl.createBuffer()
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+            gl.bufferData(gl.ARRAY_BUFFER, verticesColors, gl.STATIC_DRAW)
+
+            const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+            console.log(a_Position)
+            gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, FSIZE * 4, 0)
+            gl.enableVertexAttribArray(a_Position)
+            
+            const a_TexCoord = gl.getAttribLocation(gl.program, 'a_TexCoord')
+            console.log('a_TexCoord', a_TexCoord)
+            gl.vertexAttribPointer(a_TexCoord, 2, gl.FLOAT, false, FSIZE * 4, FSIZE * 2)
+            gl.enableVertexAttribArray(a_TexCoord)
+
+            return n
+        }
+
+        function initTextures(gl) {
+            const texture = gl.createTexture()
+
+            const u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler')
+
+            const image = new Image()
+
+            image.onload = () => {
+                loadTexture(gl, texture, u_Sampler, image)
+            }
+            image.src = 'http://localhost:8080/sky.jpg'
+
+            return true
+        }
+
+        function loadTexture(gl, texture, u_Sampler, image) {
+            // 对纹理图像进行y轴反转
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
+            // 开启0号纹理单元
+            gl.activeTexture(gl.TEXTURE0)
+            // 向target绑定纹理对象
+            gl.bindTexture(gl.TEXTURE_2D, texture)
+
+            // 配置纹理参数
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+            // 配置纹理图像
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image)
+
+            // 将0号纹理传递给着色器
+            gl.uniform1i(u_Sampler, 0)
+
+        }
+
+        main()
+
+    </script>
+</body>
+</html>
