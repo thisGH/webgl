@@ -70,7 +70,7 @@
         void main(){
 
             // 计算变换后的坐标
-            vec4 transPosition = u_RotateMatrix * a_Position;
+            vec4 transPosition = u_ProjMatrix * u_ViewMatrix * u_RotateMatrix * a_Position;
             // 计算变换后的法向量，并归一化
             vec3 normal = normalize(vec3(u_TransposeInverseModelMatrix * a_Normal));
 
