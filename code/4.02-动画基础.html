@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>08-多幅纹理</title>
+    <title>动画基础</title>
 </head>
 <body>
     <canvas id="webglcanvas" width="500" height="500"></canvas>
@@ -14,38 +14,24 @@
     <script src="./examples/lib/cuon-matrix.js"></script>
 
 
-    <script id="vertexshader" type="x-shader/x-vertex">
-
+    <script id="vertexshader" type="x-vertex">
         attribute vec4 a_Position;
         attribute float a_PointSize;
-        attribute vec2 a_TexCoord;
 
         uniform mat4 u_Matrix;
-
-        varying vec2 v_TexCoord;
 
         void main(){
             gl_Position = u_Matrix * a_Position;
 
             gl_PointSize = a_PointSize;
-
-            v_TexCoord = a_TexCoord;
-
         }
 
     </script>
-     <script id="fragmentshader" type="x-shader/x-fragment">
+     <script id="fragmentshader" type="x-fragment">
         precision mediump float;
-
-        uniform sampler2D u_Sampler0;
-        uniform sampler2D u_Sampler1;
-
-        varying vec2 v_TexCoord;
-
+        uniform vec4 u_FragColor;
         void main(){
-            vec4 color0 = texture2D(u_Sampler0, v_TexCoord);
-            vec4 color1 = texture2D(u_Sampler1, v_TexCoord);
-            gl_FragColor = color0 * color1;
+            gl_FragColor = u_FragColor;
         }
 
      </script>
@@ -78,14 +64,19 @@
                 return
             }
 
+            const u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor')
+            if(a_PointSize < 0) {
+                console.log('Failed to get the storage location of u_FragColor')
+                return
+            }
+
             gl.vertexAttrib1f(a_PointSize, 5)
+            gl.uniform4f(u_FragColor, 1.0, 0.0, 0.0, 1.0)
 
             draw(gl)
         }
 
-        async function draw(gl) {
-
-            await initTextures(gl)
+        function draw(gl) {
 
             const n = initVertexBuffers(gl)
 
@@ -116,10 +107,8 @@
 
             const u_Matrix = new Matrix4()
 
-            const scale = 0.5
-
             u_Matrix.translate(0.3, 0.0, 0.0)
-            u_Matrix.scale(scale, scale, scale)
+            u_Matrix.scale(0.3, 0.3, 0.3)
             
             return () => {
                 const newNow = Date.now()
@@ -129,8 +118,7 @@
                     const angleDiff = ((newNow - now) / 1000) * anglePerSec
                     now = newNow
 
-                    // u_Matrix.rotate(angleDiff, 0.0, 0.0, 1.0)
-                    u_Matrix.rotate(0, 0.0, 0.0, 1.0)
+                    u_Matrix.rotate(angleDiff, 0.0, 0.0, 1.0)
                     const u_MatrixLoc = gl.getUniformLocation(gl.program, 'u_Matrix')
                     gl.uniformMatrix4fv(u_MatrixLoc, false, u_Matrix.elements)
                 }
@@ -138,79 +126,21 @@
         }
 
         function initVertexBuffers(gl) {
-            const verticesColors = new Float32Array([
-                -0.5, 0.5, -0.3, 1.7, 
-                -0.5, -0.5, -0.3, -0.3,
-                0.5, -0.5, 1.7, -0.3, 
-                0.5, 0.5, 1.7, 1.7
+            const vertices = new Float32Array([
+                -0.5, 0.5, -0.5, -0.5, 0.5, -0.5
             ])
 
-            const FSIZE = verticesColors.BYTES_PER_ELEMENT
-
-            const n = 4
+            const n = 3
 
             const vertexBuffer = gl.createBuffer()
 
             gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
-            gl.bufferData(gl.ARRAY_BUFFER, verticesColors, gl.STATIC_DRAW)
-
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
             const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
-            gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, FSIZE * 4, 0)
+            gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, 0, 0)
             gl.enableVertexAttribArray(a_Position)
-            
-            const a_TexCoord = gl.getAttribLocation(gl.program, 'a_TexCoord')
-            console.log('a_TexCoord', a_TexCoord)
-            gl.vertexAttribPointer(a_TexCoord, 2, gl.FLOAT, false, FSIZE * 4, FSIZE * 2)
-            gl.enableVertexAttribArray(a_TexCoord)
 
             return n
-        }
-
-        function initTextures(gl) {
-
-            const urlList = ['/materials/sky.jpg', '/materials/circle.gif']
-
-            return Promise.all(urlList.map((url, index) => {
-                return new Promise(res => {
-
-                    console.log(index)
-                    const texture = gl.createTexture()
-                    const u_Sampler = gl.getUniformLocation(gl.program, `u_Sampler${index}`)
-                    const image = new Image()
-                    image.onload = () => {
-                        loadTexture(gl, texture, u_Sampler, image, index)
-                        res()
-                    }
-                    image.src = url
-                })
-            }))
-        }
-
-        function loadTexture(gl, texture, u_Sampler, image, textUnit) {
-
-            // 对纹理图像进行y轴反转
-            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
-
-
-
-            // 开启0号纹理单元
-            gl.activeTexture([gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5][textUnit])
-
-
-
-            // 向target绑定纹理对象
-            gl.bindTexture(gl.TEXTURE_2D, texture)
-
-            // 配置纹理参数
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-            // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-            // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT)
-            // 配置纹理图像
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image)
-
-            // 将0号纹理传递给着色器
-            gl.uniform1i(u_Sampler, textUnit)
-
         }
 
         main()

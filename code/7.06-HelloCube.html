@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HelloCube</title>
+</head>
+
+<style>
+
+    #my-vue div {
+        display: inline-block;
+        background-color: #999;
+        width: 20px;
+        height: 20px;
+
+        cursor: pointer;
+
+    }
+</style>
+<body>
+    <canvas id="webglcanvas" width="500" height="500"></canvas>
+    <div id="my-vue">
+        <div @click="rotate(0)">👆</div>
+        <div @click="rotate(1)">👇</div>
+        <div @click="rotate(2)">👈</div>
+        <div @click="rotate(3)">👉</div>
+    </div>
+
+    <script src="./examples/lib/webgl-utils.js"></script>
+    <script src="./examples/lib/webgl-debug.js"></script>
+    <script src="./examples/lib/cuon-utils.js"></script>
+    <script src="./examples/lib/cuon-matrix.js"></script>
+
+    <script src="https://unpkg.com/petite-vue"></script>
+
+
+    <script id="vertexshader" type="text">
+        attribute vec4 a_Position;
+        attribute float a_PointSize;
+        attribute vec4 a_FragColor;
+        
+        varying vec4 v_FragColor;
+
+        uniform mat4 u_ViewMatrix;
+        uniform mat4 u_RotateMatrix;
+        uniform mat4 u_ProjMatrix;
+
+
+        void main(){
+            gl_Position = u_ProjMatrix * u_ViewMatrix * u_RotateMatrix * a_Position;
+            gl_PointSize = a_PointSize;
+            v_FragColor = a_FragColor;
+        }
+
+    </script>
+     <script id="fragmentshader" type="text">
+        precision mediump float;
+        varying vec4 v_FragColor;
+        void main(){
+            gl_FragColor = v_FragColor;
+        }
+
+     </script>
+     
+    <script>
+
+        const viewParams = {
+            eyeAngle: 0,
+            eye: [2, 0.0, 5],
+            at: [0.0, 0.0, -1.0],
+            up: [0.0, 1.0, 0.0],
+
+            // orth
+            // far: 0.6,
+            // near: -1,
+            // left: -1,
+            // right: 1,
+
+            // perspective
+            fov: 75,
+            aspect: 1,
+            near: 1,
+            far: 100,
+
+            rotateMatrix: new Matrix4()
+        }
+
+        
+
+        const VSHADER_SOURCE = document.getElementById('vertexshader').innerHTML
+        const FSHADER_SOURCE = document.getElementById('fragmentshader').innerHTML
+
+
+
+        function main() {
+            // Retrieve <canvas> element
+            var canvas = document.getElementById('webglcanvas');
+
+            // Get the rendering context for WebGL
+            var gl = getWebGLContext(canvas);
+            if (!gl) {
+                console.log('Failed to get the rendering context for WebGL');
+                return;
+            }
+
+            // Initialize shaders
+            if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
+                console.log('Failed to intialize shaders.');
+                return;
+            }
+
+            const a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize')
+            if(a_PointSize < 0) {
+                console.log('Failed to get the storage location of a_PointSize')
+                return
+            }
+
+            const u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor')
+            if(a_PointSize < 0) {
+                console.log('Failed to get the storage location of u_FragColor')
+                return
+            }
+
+            gl.vertexAttrib1f(a_PointSize, 5)
+
+            const n = initVertexBuffers(gl)
+
+            rotate(gl)
+
+            initKeyboardEvents(gl, n)
+
+
+
+            draw(gl, n)
+
+
+            
+            const vueIns = PetiteVue.createApp({
+                    rotate(dir) {
+                        if(dir === 0) {
+                            viewParams.rotateMatrix.rotate(3, 1, 0, 0)
+                        }
+                        if(dir === 1) {
+                            viewParams.rotateMatrix.rotate(-3, 1, 0, 0)
+                        }
+                        if(dir === 2) {
+                            viewParams.rotateMatrix.rotate(3, 0, 1, 0)
+                        }
+                        if(dir === 3) {
+                            viewParams.rotateMatrix.rotate(-3, 0, 1, 0)
+                        }
+                        rotate(gl)
+                        draw(gl, n)
+                    }    
+                }
+
+            ).mount('#my-vue')
+        }
+
+        function initPerspective(gl) {
+            const projMatrix = new Matrix4()
+            projMatrix.setPerspective(viewParams.fov, viewParams.aspect, viewParams.near, viewParams.far)
+            const u_ProjMatrix = gl.getUniformLocation(gl.program, 'u_ProjMatrix')
+            gl.uniformMatrix4fv(u_ProjMatrix, false, projMatrix.elements)
+        }
+
+        function initOrthographicProj(gl) {
+            const projMatrix = new Matrix4()
+            projMatrix.setOrtho(viewParams.left, viewParams.right, -1, 1, viewParams.near, viewParams.far)
+
+            const u_ProjMatrix = gl.getUniformLocation(gl.program, 'u_ProjMatrix')
+
+            gl.uniformMatrix4fv(u_ProjMatrix, false, projMatrix.elements)
+        }
+
+        function initKeyboardEvents(gl, n) {
+            document.onkeydown = (e) => {
+                if(e.code === 'ArrowLeft') {
+                    viewParams.eye[0] += 0.01
+                }
+                if(e.code === 'ArrowRight') {
+                    viewParams.eye[0] -= 0.01
+                }
+
+                draw(gl, n)
+            }
+        }
+
+        function rotate(gl) {
+            const rotateMatrix = viewParams.rotateMatrix
+            const u_RotateMatrix = gl.getUniformLocation(gl.program, 'u_RotateMatrix')
+            gl.uniformMatrix4fv(u_RotateMatrix, false, rotateMatrix.elements)
+        }
+
+        function draw(gl, n) {
+
+            initPerspective(gl)
+
+            const viewMatrix = new Matrix4()
+
+            viewMatrix.setLookAt(
+
+                // eye
+                ...viewParams.eye,
+
+                // at
+                ...viewParams.at,
+
+                // up
+                ...viewParams.up,
+            )
+
+            const u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix')
+            gl.uniformMatrix4fv(u_ViewMatrix, false, viewMatrix.elements )
+
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            gl.clearColor(0.9, 0.9, 0.9, 1.0);
+
+            gl.enable(gl.DEPTH_TEST)
+
+            gl.drawElements(gl.TRIANGLES, n, gl.UNSIGNED_BYTE, 0)
+        }
+
+
+        // https://raw.githubusercontent.com/thisGH/md-img/main/pc/202403261548983.png
+        function initVertexBuffers(gl) {
+            const vertices = [
+                [-1.0, -1.0, 1.0], // A 0
+                [1.0, -1.0, 1.0], // B 1
+                [1.0, 1.0, 1.0], // C 2
+                [-1.0, 1.0, 1.0], // D 3
+                [-1.0, -1.0, -1.0], // E 4
+                [1.0, -1.0, -1.0], // F 5
+                [1.0, 1.0, -1.0], // G 6
+                [-1.0, 1.0, -1.0] // H 7
+            ]
+            const colors = [
+                [0.4, 0.4, 1.0],
+                [0.4, 1.0, 0.4],
+                [1.0, 0.4, 0.4],
+                [1.0, 1.0, 0.4],
+                [1.0, 0.4, 1.0],
+                [0.4, 1.0, 1.0]
+            ]
+
+            // [
+            //     [ 0, 1, 2, 0, 3, 2, 0.4, 0.4, 1.0],
+            //     [ 1, 5, 6, 1, 2, 6, 0.4, 1.0, 0.4],
+            //     [ 5, 4, 7, 5, 6, 7, 1.0, 0.4, 0.4],
+            //     [ 4, 0, 3, 4, 7, 3, 1.0, 1.0, 0.4],
+            //     [ 3, 2, 6, 3, 7, 6, 1.0, 0.4, 1.0],
+            //     [ 0, 1, 5, 0, 4, 5, 0.4, 1.0, 1.0]
+            // ]
+
+            const verticesFA = new Float32Array([
+                ...vertices[0], ...vertices[1], ...vertices[2], ...vertices[3],
+                ...vertices[1], ...vertices[5], ...vertices[6], ...vertices[2],
+                ...vertices[5], ...vertices[4], ...vertices[7], ...vertices[6],
+                ...vertices[4], ...vertices[0], ...vertices[3], ...vertices[7],
+                ...vertices[3], ...vertices[2], ...vertices[6], ...vertices[7],
+                ...vertices[0], ...vertices[1], ...vertices[5], ...vertices[4],
+            ])
+            const colorsFA = new Float32Array([
+                ...colors[0], ...colors[0], ...colors[0], ...colors[0], 
+                ...colors[1], ...colors[1], ...colors[1], ...colors[1], 
+                ...colors[2], ...colors[2], ...colors[2], ...colors[2], 
+                ...colors[3], ...colors[3], ...colors[3], ...colors[3], 
+                ...colors[4], ...colors[4], ...colors[4], ...colors[4], 
+                ...colors[5], ...colors[5], ...colors[5], ...colors[5], 
+
+            ])
+            const indexes = new Uint8Array([
+                0, 1, 2, 0, 3, 2,
+                4, 5, 6, 4, 7, 6,
+                8, 9, 10, 8, 11, 10,
+                12, 13, 14, 12, 15, 14,
+                16, 17, 18, 16, 19, 18,
+                20, 21, 22, 20, 23, 22,
+            ])
+
+            const vertexBuffer0 = gl.createBuffer()
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer0)
+            gl.bufferData(gl.ARRAY_BUFFER, verticesFA, gl.STATIC_DRAW)
+            const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+            gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0)
+            gl.enableVertexAttribArray(a_Position)
+
+            const vertexBuffer1 = gl.createBuffer()
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer1)
+            gl.bufferData(gl.ARRAY_BUFFER, colorsFA, gl.STATIC_DRAW)
+            const a_FragColor = gl.getAttribLocation(gl.program, 'a_FragColor')
+            gl.vertexAttribPointer(a_FragColor, 3, gl.FLOAT, false, 0, 0)
+            gl.enableVertexAttribArray(a_FragColor)
+
+            const indexBuffer = gl.createBuffer()
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indexes, gl.STATIC_DRAW)
+
+            return indexes.length
+        }
+
+        main()
+
+
+    </script>
+</body>
+</html>

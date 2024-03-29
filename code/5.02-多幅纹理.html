@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>07-纹理</title>
+    <title>多幅纹理</title>
 </head>
 <body>
     <canvas id="webglcanvas" width="500" height="500"></canvas>
@@ -37,12 +37,15 @@
      <script id="fragmentshader" type="x-shader/x-fragment">
         precision mediump float;
 
-        uniform sampler2D u_Sampler;
+        uniform sampler2D u_Sampler0;
+        uniform sampler2D u_Sampler1;
 
         varying vec2 v_TexCoord;
 
         void main(){
-            gl_FragColor = texture2D(u_Sampler, v_TexCoord);
+            vec4 color0 = texture2D(u_Sampler0, v_TexCoord);
+            vec4 color1 = texture2D(u_Sampler1, v_TexCoord);
+            gl_FragColor = color0 * color1;
         }
 
      </script>
@@ -80,9 +83,9 @@
             draw(gl)
         }
 
-        function draw(gl) {
+        async function draw(gl) {
 
-            initTextures(gl)
+            await initTextures(gl)
 
             const n = initVertexBuffers(gl)
 
@@ -152,7 +155,6 @@
             gl.bufferData(gl.ARRAY_BUFFER, verticesColors, gl.STATIC_DRAW)
 
             const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
-            console.log(a_Position)
             gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, FSIZE * 4, 0)
             gl.enableVertexAttribArray(a_Position)
             
@@ -165,37 +167,49 @@
         }
 
         function initTextures(gl) {
-            const texture = gl.createTexture()
 
-            const u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler')
+            const urlList = ['/materials/sky.jpg', '/materials/circle.gif']
 
-            const image = new Image()
+            return Promise.all(urlList.map((url, index) => {
+                return new Promise(res => {
 
-            image.onload = () => {
-                loadTexture(gl, texture, u_Sampler, image)
-            }
-            image.src = '/materials/sky.jpg'
-
-            return true
+                    console.log(index)
+                    const texture = gl.createTexture()
+                    const u_Sampler = gl.getUniformLocation(gl.program, `u_Sampler${index}`)
+                    const image = new Image()
+                    image.onload = () => {
+                        loadTexture(gl, texture, u_Sampler, image, index)
+                        res()
+                    }
+                    image.src = url
+                })
+            }))
         }
 
-        function loadTexture(gl, texture, u_Sampler, image) {
+        function loadTexture(gl, texture, u_Sampler, image, textUnit) {
+
             // 对纹理图像进行y轴反转
             gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
+
+
+
             // 开启0号纹理单元
-            gl.activeTexture(gl.TEXTURE0)
+            gl.activeTexture([gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5][textUnit])
+
+
+
             // 向target绑定纹理对象
             gl.bindTexture(gl.TEXTURE_2D, texture)
 
             // 配置纹理参数
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT)
+            // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+            // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT)
             // 配置纹理图像
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image)
 
             // 将0号纹理传递给着色器
-            gl.uniform1i(u_Sampler, 0)
+            gl.uniform1i(u_Sampler, textUnit)
 
         }
 

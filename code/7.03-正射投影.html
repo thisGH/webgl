@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>正射投影</title>
+</head>
+<body>
+    <canvas id="webglcanvas" width="500" height="500"></canvas>
+    <div id="my-vue">
+        <div>
+            <p>near</p> <strong>{{near}}</strong>
+            <div>            
+                <button @click="near+=0.05">+=0.05</button>
+                <button @click="near-=0.05">-=0.05</button>
+            </div>
+
+        </div>
+        <div>
+            <p>far</p> <strong>{{far}}</strong>
+            <div>            
+                <button @click="far+=0.05">+=0.05</button>
+                <button @click="far-=0.05">-=0.05</button>
+            </div>
+        </div>
+
+        <div>
+            <p>left</p> <strong>{{left}}</strong>
+            <div>            
+                <button @click="left+=0.05">+=0.05</button>
+                <button @click="left-=0.05">-=0.05</button>
+            </div>
+
+        </div>
+        <div>
+            <p>right</p> <strong>{{right}}</strong>
+            <div>            
+                <button @click="right+=0.05">+=0.05</button>
+                <button @click="right-=0.05">-=0.05</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="./examples/lib/webgl-utils.js"></script>
+    <script src="./examples/lib/webgl-debug.js"></script>
+    <script src="./examples/lib/cuon-utils.js"></script>
+    <script src="./examples/lib/cuon-matrix.js"></script>
+
+    <script src="https://unpkg.com/petite-vue"></script>
+
+
+    <script id="vertexshader" type="text">
+        attribute vec4 a_Position;
+        attribute float a_PointSize;
+        attribute vec4 a_FragColor;
+        
+        varying vec4 v_FragColor;
+
+        uniform mat4 u_ViewMatrix;
+        uniform mat4 u_RotateMatrix;
+        uniform mat4 u_ProjMatrix;
+
+
+        void main(){
+            gl_Position = u_ViewMatrix * u_RotateMatrix * u_ProjMatrix * a_Position;
+            gl_PointSize = a_PointSize;
+            v_FragColor = a_FragColor;
+        }
+
+    </script>
+     <script id="fragmentshader" type="text">
+        precision mediump float;
+        varying vec4 v_FragColor;
+        void main(){
+            gl_FragColor = v_FragColor;
+        }
+
+     </script>
+     
+    <script>
+
+        const viewParams = {
+            eyeAngle: 0,
+            eye: [0.5, 0.25, 0.25],
+            at: [0.0, 0.0, -1.0],
+            up: [0.0, 1.0, 0.0],
+
+            far: 0.5,
+            near: 0,
+            left: -1,
+            right: 1
+        }
+
+        
+
+        const VSHADER_SOURCE = document.getElementById('vertexshader').innerHTML
+        const FSHADER_SOURCE = document.getElementById('fragmentshader').innerHTML
+
+
+
+        function main() {
+            // Retrieve <canvas> element
+            var canvas = document.getElementById('webglcanvas');
+
+            // Get the rendering context for WebGL
+            var gl = getWebGLContext(canvas);
+            if (!gl) {
+                console.log('Failed to get the rendering context for WebGL');
+                return;
+            }
+
+            // Initialize shaders
+            if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
+                console.log('Failed to intialize shaders.');
+                return;
+            }
+
+            const a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize')
+            if(a_PointSize < 0) {
+                console.log('Failed to get the storage location of a_PointSize')
+                return
+            }
+
+            const u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor')
+            if(a_PointSize < 0) {
+                console.log('Failed to get the storage location of u_FragColor')
+                return
+            }
+
+            gl.vertexAttrib1f(a_PointSize, 5)
+
+            const n = initVertexBuffers(gl)
+
+            rotate(gl)
+
+            initKeyboardEvents(gl, n)
+
+            draw(gl, n)
+
+
+            
+            const vueIns = PetiteVue.createApp({
+                    get near() {
+                        return viewParams.near
+                    },
+                    set near(val) {
+                        viewParams.near = val
+                        draw(gl,n)
+                    },
+                    get far() {
+                        return viewParams.far
+                    },
+                    set far(val) {
+                        viewParams.far = val
+                        draw(gl,n)
+                    },
+                    get left() {
+                        return viewParams.left
+                    },
+                    set left(val) {
+                        viewParams.left = val
+                        draw(gl,n)
+                    },
+                    get right() {
+                        return viewParams.right
+                    },
+                    set right(val) {
+                        viewParams.right = val
+                        draw(gl,n)
+                    },
+                }
+
+            ).mount('#my-vue')
+            console.log(vueIns)
+        }
+
+        function initOthrProj(gl) {
+            const projMatrix = new Matrix4()
+            projMatrix.setOrtho(viewParams.left, viewParams.right, -1, 1, viewParams.near, viewParams.far)
+
+            const u_ProjMatrix = gl.getUniformLocation(gl.program, 'u_ProjMatrix')
+
+            gl.uniformMatrix4fv(u_ProjMatrix, false, projMatrix.elements)
+        }
+
+        function initKeyboardEvents(gl, n) {
+            document.onkeydown = (e) => {
+                if(e.code === 'ArrowLeft') {
+                    // viewParams.eyeAngle += 3
+                    // if(viewParams.eyeAngle === 360) {
+                    //     viewParams.eyeAngle = 0
+                    // }
+
+                    viewParams.eye[0] += 0.01
+                }
+                if(e.code === 'ArrowRight') {
+                    // viewParams.eyeAngle -= 3
+                    // if(viewParams.eyeAngle === -3) {
+                    //     viewParams.eyeAngle = -357
+                    // }
+                    viewParams.eye[0] -= 0.01
+
+                }
+
+                draw(gl, n)
+            }
+        }
+
+        function rotate(gl) {
+            const rotateMatrix = new Matrix4()
+            rotateMatrix.setRotate(90, 0.0, 0.0, 1.0)
+
+            const u_RotateMatrix = gl.getUniformLocation(gl.program, 'u_RotateMatrix')
+            gl.uniformMatrix4fv(u_RotateMatrix, false, rotateMatrix.elements)
+        }
+
+        function draw(gl, n) {
+
+            initOthrProj(gl)
+
+            const viewMatrix = new Matrix4()
+
+            viewMatrix.setLookAt(
+
+                // eye
+                ...viewParams.eye,
+
+                // at
+                ...viewParams.at,
+
+                // up
+                ...viewParams.up,
+            )
+
+            const u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix')
+            gl.uniformMatrix4fv(u_ViewMatrix, false, viewMatrix.elements )
+
+            gl.clearColor(0.9, 0.9, 0.9, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.drawArrays(gl.TRIANGLES, 0, n)
+        }
+
+        function initVertexBuffers(gl) {
+            const vertices = new Float32Array([
+
+                -0.3, 0.5, -0.4, 1.0, 0.4, 0.4,
+                0.2, 0.0, -0.4, 1.0, 0.4, 0.4,
+                -0.8, 0.0, -0.4, 1.0, 0.4, 0.4,
+
+                0.0, 0.5, -0.2, 0.4, 1.0, 0.4,
+                0.5, 0.0, -0.2, 0.4, 1.0, 0.4,
+                -0.5, 0.0, -0.2, 0.4, 1.0, 0.4,
+
+                0.3, 0.5, 0.0, 0.4, 0.4, 1.0,
+                0.8, 0.0, 0.0, 0.4, 0.4, 1.0,
+                -0.2, 0.0, 0.0, 0.4, 0.4, 1.0,
+
+            ])
+
+            const n = 9
+
+            const vertexBuffer = gl.createBuffer()
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
+
+            const FSIZE = vertices.BYTES_PER_ELEMENT
+
+            const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+            gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, FSIZE * 6, 0)
+            gl.enableVertexAttribArray(a_Position)
+
+            const a_FragColor = gl.getAttribLocation(gl.program, 'a_FragColor')
+            gl.vertexAttribPointer(a_FragColor, 3, gl.FLOAT, false, FSIZE * 6, FSIZE * 3)
+            gl.enableVertexAttribArray(a_FragColor)
+
+            return n
+        }
+
+        main()
+
+
+    </script>
+</body>
+</html>
