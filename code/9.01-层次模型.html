@@ -28,28 +28,42 @@
 
     <script id="vertexshader" type="text">
         attribute float a_PointSize;
-        attribute vec3 a_Position;
-        attribute vec3 a_Normal;
+        attribute vec4 a_Position;
+        attribute vec4 a_Normal;
         attribute vec4 a_Color;
 
-        uniform mat4 u_VPMatrix;
+        uniform mat4 u_MVPMatrix;
+        uniform mat4 u_InverseTransposeMatrix;
+
 
         varying vec4 v_Color;
+        varying vec4 v_Normal;
 
         void main(){
             v_Color = a_Color;
+            v_Normal = normalize(u_InverseTransposeMatrix * a_Normal);
 
-            gl_Position = vec4(a_Position, 1.0);
+            gl_Position = u_MVPMatrix * a_Position;
             gl_PointSize = a_PointSize;
         }
     </script>
      <script id="fragmentshader" type="text">
         precision mediump float;
 
+        uniform mat4 u_InverseTransposeMatrix;
+        uniform vec4 u_ParallelLightColor;
+        uniform vec4 u_ParallelLightDirection;
+
         varying vec4 v_Color;
+        varying vec4 v_Normal;
 
         void main(){
-            gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+
+            vec4 normal = normalize(v_Normal);
+            float nDotL = max(dot(u_ParallelLightDirection, normal), 0.0);
+            vec4 diffuseColor = v_Color * u_ParallelLightColor * nDotL;
+
+            gl_FragColor = diffuseColor;
         }
 
      </script>
@@ -75,47 +89,87 @@
                 return;
             }
 
-            const a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize')
-            gl.vertexAttrib1f(a_PointSize, 1)
-
-  
-
-
-            initViewProj(canvas, gl)
-
-            drawBoxes(gl)
-
-        }
-
-        function initViewProj(canvas, gl) {
-            const viewProjMatrix = new Matrix4()
-            viewProjMatrix.setPerspective(50, canvas.width / canvas.height, 1.0, 100.0)
-            viewProjMatrix.lookAt(1.0, 3.0, 3.0,  0.0, 0.0, 0.0,  0.0, 1.0, 0.0)
-            const u_VPMatrix = gl.getUniformLocation(gl.program, 'u_VPMatrix')
-            gl.uniformMatrix4fv(u_VPMatrix, false, viewProjMatrix.elements)
-        }
-
-
-
-
-        function drawBoxes(gl) {
-
-            // joint0
-            const joint0 = createBox(1, 1, 1, [1, 0, 0])
-            initVertexBuffers(gl, joint0.vertex, joint0.color, joint0.normal, joint0.index)
-
-            console.log(joint0)
-
-            
-            gl.enable(gl.DEPTH_TEST)
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
             gl.clearColor(0.9, 0.9, 0.9, 1.0);
+            gl.enable(gl.DEPTH_TEST)
 
-            gl.drawElements(gl.TRIANGLES, joint0.index.length, gl.UNSIGNED_BYTE, 0)
+            const a_PointSize = gl.getAttribLocation(gl.program, 'a_PointSize')
+            gl.vertexAttrib1f(a_PointSize, 5)
+
+            initLights(gl)
+
+            drawJoints(canvas, gl)
+
+        }
+
+        function initLights(gl) {
+            // 平行光
+            const u_ParallelLightColor = gl.getUniformLocation(gl.program, 'u_ParallelLightColor')
+            gl.uniform4f(u_ParallelLightColor, 1, 1, 1, 1)
+            const u_ParallelLightDirection = gl.getUniformLocation(gl.program, 'u_ParallelLightDirection')
+            gl.uniform4f(u_ParallelLightDirection, 0, 0, -1, 1)
+        }
+
+        function drawJoints(canvas, gl) {
+
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            const PVMatrix = new Matrix4()
+            PVMatrix.setPerspective(50, canvas.width / canvas.height, 1.0, 100.0)
+            PVMatrix.lookAt(2, 5, 8, 0, 3, 0,  0.0, 1.0, 0.0)
+
+            const MMatrix = new Matrix4()
+
+            MMatrix.rotate(0, 0, 1, 0)
+            const joint0 = createBox(1, 3, 1, [0.5, 0, 0])
+            drawBox(gl, MMatrix, PVMatrix, joint0)
+
+            MMatrix.translate(0, 1.5, 0)
+            MMatrix.rotate(0, 1, 0, 0)
+            MMatrix.translate(0, 1.5, 0)
+            const joint1 = createBox(1, 3, 1, [0, 0.5, 0])
+            drawBox(gl, MMatrix, PVMatrix, joint1)
+
+
+            MMatrix.translate(0, 1.6, 0)
+            MMatrix.rotate(0, 0, 1, 0)
+            const joint2 = createBox(1.2, 0.2, 1.2, [0, 0, 0.5])
+            drawBox(gl, MMatrix, PVMatrix, joint2)
+
+            const MMatrix1 = new Matrix4().set(MMatrix)
+
+            MMatrix.translate(0, 0, 0.3)
+            MMatrix.rotate(-30, 1, 0, 0)
+            MMatrix.translate(0, 0.3, 0)
+            const joint3 = createBox(0.2, 0.6, 0.2, [0.3, 0, 0.5])
+            drawBox(gl, MMatrix, PVMatrix, joint3)
+
+            MMatrix1.translate(0, 0, -0.3)
+            MMatrix1.rotate(30, 1, 0, 0)
+            MMatrix1.translate(0, 0.3, 0)
+            const joint4 = createBox(0.2, 0.6, 0.2, [0.5, 0, 0.5])
+            drawBox(gl, MMatrix1, PVMatrix, joint4)
+        }
+
+        function drawBox(gl, MMatrix, PVMatrix, joint) {
+
+            const MPVMatrix = new Matrix4().set(PVMatrix).multiply(MMatrix)
+
+            const u_MVPMatrix = gl.getUniformLocation(gl.program, 'u_MVPMatrix')
+            gl.uniformMatrix4fv(u_MVPMatrix, false, MPVMatrix.elements)
+
+            // 计算变换后的法向量
+            const inverseTransposeMatrix = new Matrix4()
+            inverseTransposeMatrix.setInverseOf(MMatrix)
+            inverseTransposeMatrix.transpose()
+            
+            const u_InverseTransposeMatrix = gl.getUniformLocation(gl.program, 'u_InverseTransposeMatrix')
+            gl.uniformMatrix4fv(u_InverseTransposeMatrix, false, inverseTransposeMatrix.elements)
+            
+            initVertexBuffers(gl, joint.vertex, joint.color, joint.normal, joint.index)
+            gl.drawElements(gl.TRIANGLES, joint.index.length, gl.UNSIGNED_BYTE, 0)
         }
 
         function initVertexBuffers(gl, vertex, color, normal, index) {
-
             // a_Position
             const buffer0 = gl.createBuffer()
             gl.bindBuffer(gl.ARRAY_BUFFER, buffer0)
@@ -126,19 +180,19 @@
 
             // a_Color
             const buffer1 = gl.createBuffer()
-            gl.bindBuffer(gl.ARRAY_BUFFER, buffer0)
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer1)
             gl.bufferData(gl.ARRAY_BUFFER, color, gl.STATIC_DRAW)
             const a_Color = gl.getAttribLocation(gl.program, 'a_Color')
-            gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0)
-            gl.enableVertexAttribArray(a_Position)
+            gl.vertexAttribPointer(a_Color, 3, gl.FLOAT, false, 0, 0)
+            gl.enableVertexAttribArray(a_Color)
 
             // a_Normal
             const buffer2 = gl.createBuffer()
-            gl.bindBuffer(gl.ARRAY_BUFFER, buffer0)
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer2)
             gl.bufferData(gl.ARRAY_BUFFER, normal, gl.STATIC_DRAW)
             const a_Normal = gl.getAttribLocation(gl.program, 'a_Normal')
-            gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0)
-            gl.enableVertexAttribArray(a_Position)
+            gl.vertexAttribPointer(a_Normal, 3, gl.FLOAT, false, 0, 0)
+            gl.enableVertexAttribArray(a_Normal)
 
             // index
             const buffer3 = gl.createBuffer()
